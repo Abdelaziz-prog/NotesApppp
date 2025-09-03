@@ -1,8 +1,9 @@
 package com.ramez.notesapp.ui.Screens
 
-import android.R.attr.checked
-import android.webkit.WebSettings
-import androidx.compose.foundation.layout.Arrangement
+import android.util.Log
+import android.widget.Toast
+import androidx.annotation.RestrictTo
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,23 +15,51 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ModifierLocalBeyondBoundsLayout
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import com.ramez.notesapp.Composables.MakeTextField
+import com.ramez.notesapp.data.Prefs
+import kotlinx.coroutines.launch
 
 @Composable
-fun LoginScreen() {
+fun LoginScreen(navController: NavController) {
+    var email by rememberSaveable { mutableStateOf("")}
+    var password by rememberSaveable { mutableStateOf("")}
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val db = remember { AppDataBase.getDataBase(context) }
+    val userDao = remember { db.userDao() }
 
+    val sharedPref = context.getSharedPreferences("notes_app_pref", 0)
+
+
+    val savedEmail = sharedPref.getString("user_email", null)
+    val rememberMe = sharedPref.getBoolean("remember_me", false)
+
+    if (rememberMe && savedEmail != null) {
+
+        LaunchedEffect(Unit) {
+            navController.navigate("Home") {
+                popUpTo("Login") { inclusive = true }
+            }
+        }
+    }
+
+    var checked by rememberSaveable { mutableStateOf(rememberMe)}
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -46,10 +75,10 @@ fun LoginScreen() {
             fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(200.dp))
-        MakeTextField("Email ")
+        MakeTextField( "Email ", onValueChange = {email =it}, text = email)
 
         Spacer(modifier = Modifier.height(20.dp))
-        MakeTextField("Password ")
+        MakeTextField("Password ", onValueChange = {password =it}, text = password)
 
         var checked by remember { mutableStateOf(false) }
 
@@ -59,7 +88,10 @@ fun LoginScreen() {
         ) {
             Checkbox(
                 checked = checked,
-                onCheckedChange = { checked = it }
+                onCheckedChange = { isChecked ->
+                    checked = isChecked
+                    sharedPref.edit().putBoolean("remember_me", isChecked).apply()
+                    }
             )
             Text(
                 text = "Remember me",
@@ -77,9 +109,28 @@ fun LoginScreen() {
 
         Button(
             modifier = Modifier.fillMaxWidth(),
-            onClick = {}
+            onClick = {
+                scope.launch {
+                    val user = userDao.login(email, password)
+
+                    Log.d("iddd",user?.id.toString())
+                    if (user != null) {
+                        navController.navigate("Home/${user.id}")
+                        Prefs.putString("id", user.id.toString())
+                    } else {
+
+                        Toast.makeText(context, "Invalid email or password", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+
+            }
         ) {
-            Text("Login ", fontSize = 20.sp)
+            Text("Login ", fontSize = 20.sp, )
+
         }
-    }
+        Text("Dont Have Acoount?", modifier = Modifier.clickable(onClick = {navController.navigate("Register")
+        })
+         )
+}
 }
